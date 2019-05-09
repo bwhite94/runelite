@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018, Seth <Sethtroll3@gmail.com>
+ * Copyright (c) 2019, Brandon White <bmwqg@live.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,21 +26,31 @@
 package net.runelite.client.plugins.blastfurnace;
 
 import com.google.inject.Provides;
+import java.time.Duration;
+import java.time.Instant;
 import javax.inject.Inject;
 import lombok.AccessLevel;
 import lombok.Getter;
+import net.runelite.api.Client;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
-import static net.runelite.api.NullObjectID.NULL_9092;
-import static net.runelite.api.ObjectID.CONVEYOR_BELT;
+import net.runelite.api.Skill;
 import net.runelite.api.events.GameObjectDespawned;
 import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
+import static net.runelite.api.NullObjectID.NULL_9092;
+import static net.runelite.api.ObjectID.CONVEYOR_BELT;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
+import net.runelite.client.util.Text;
 
 @PluginDescriptor(
 	name = "Blast Furnace",
@@ -50,11 +61,15 @@ public class BlastFurnacePlugin extends Plugin
 {
 	private static final int BAR_DISPENSER = NULL_9092;
 
+	private static final String FOREMAN_PERMISSION_TEXT = "Okay, you can use the furnace for ten minutes. Remember, you only need half as much coal as with a regular furnace.";
+
 	@Getter(AccessLevel.PACKAGE)
 	private GameObject conveyorBelt;
 
 	@Getter(AccessLevel.PACKAGE)
 	private GameObject barDispenser;
+
+	private ForemanTimer foremanTimer;
 
 	@Inject
 	private OverlayManager overlayManager;
@@ -67,6 +82,15 @@ public class BlastFurnacePlugin extends Plugin
 
 	@Inject
 	private BlastFurnaceClickBoxOverlay clickBoxOverlay;
+
+	@Inject
+	private Client client;
+
+	@Inject
+	private ItemManager itemManager;
+
+	@Inject
+	private InfoBoxManager infoBoxManager;
 
 	@Override
 	protected void startUp() throws Exception
@@ -133,6 +157,28 @@ public class BlastFurnacePlugin extends Plugin
 		{
 			conveyorBelt = null;
 			barDispenser = null;
+		}
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		Widget npcDialog = client.getWidget(WidgetInfo.DIALOG_NPC_TEXT);
+
+		// blocking dialog check until 5 minutes needed to avoid re-adding while dialog message still displayed
+		boolean shouldCheckForemanFee = client.getRealSkillLevel(Skill.SMITHING) < 60
+				&& (foremanTimer == null || Duration.between(Instant.now(), foremanTimer.getEndTime()).toMinutes() <= 5);
+
+		if (npcDialog != null && shouldCheckForemanFee)
+		{
+			String npcText = Text.sanitizeMultilineText(npcDialog.getText());
+
+			if (npcText.equals(FOREMAN_PERMISSION_TEXT))
+			{
+				infoBoxManager.removeIf(t -> t instanceof ForemanTimer);
+				foremanTimer = new ForemanTimer(this, itemManager);
+				infoBoxManager.addInfoBox(foremanTimer);
+			}
 		}
 	}
 }
