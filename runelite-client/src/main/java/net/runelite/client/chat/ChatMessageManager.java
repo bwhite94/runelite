@@ -46,7 +46,7 @@ import net.runelite.api.MessageNode;
 import net.runelite.api.Player;
 import net.runelite.api.Varbits;
 import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.ConfigChanged;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.api.events.ResizeableChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.api.events.VarbitChanged;
@@ -107,7 +107,7 @@ public class ChatMessageManager
 		}
 	}
 
-	@Subscribe
+	@Subscribe(priority = -1) // run after all plugins
 	public void onChatMessage(ChatMessage chatMessage)
 	{
 		MessageNode messageNode = chatMessage.getMessageNode();
@@ -119,12 +119,8 @@ public class ChatMessageManager
 
 		switch (chatMessageType)
 		{
-			case MODPRIVATECHAT:
-			case PRIVATECHAT:
-			case PRIVATECHATOUT:
-				usernameColor = isChatboxTransparent ? chatColorConfig.transparentPrivateUsernames() : chatColorConfig.opaquePrivateUsernames();
-				break;
-
+			// username recoloring for MODPRIVATECHAT, PRIVATECHAT and PRIVATECHATOUT
+			// ChatMessageTypes is handled in the script callback event
 			case TRADEREQ:
 			case AUTOTYPER:
 			case PUBLICCHAT:
@@ -143,18 +139,18 @@ public class ChatMessageManager
 				break;
 			}
 			case FRIENDSCHAT:
-				usernameColor = isChatboxTransparent ? chatColorConfig.transparentClanUsernames() : chatColorConfig.opaqueClanUsernames();
+				usernameColor = isChatboxTransparent ? chatColorConfig.transparentFriendsChatUsernames() : chatColorConfig.opaqueFriendsChatUsernames();
 				break;
 		}
 
-		senderColor = isChatboxTransparent ? chatColorConfig.transparentClanChannelName() : chatColorConfig.opaqueClanChannelName();
+		senderColor = isChatboxTransparent ? chatColorConfig.transparentFriendsChatChannelName() : chatColorConfig.opaqueFriendsChatChannelName();
 
 		if (usernameColor != null)
 		{
 			messageNode.setName(ColorUtil.wrapWithColorTag(messageNode.getName(), usernameColor));
 		}
 
-		String sender = chatMessage.getSender();
+		String sender = messageNode.getSender();
 		if (senderColor != null && !Strings.isNullOrEmpty(sender))
 		{
 			messageNode.setSender(ColorUtil.wrapWithColorTag(sender, senderColor));
@@ -168,7 +164,11 @@ public class ChatMessageManager
 				continue;
 			}
 
-			messageNode.setValue(ColorUtil.wrapWithColorTag(messageNode.getValue(), chatColor.getColor()));
+			// Replace </col> tags in the message with the new color so embedded </col> won't reset the color
+			final Color color = chatColor.getColor();
+			messageNode.setValue(ColorUtil.wrapWithColorTag(
+				messageNode.getValue().replace(ColorUtil.CLOSING_COLOR_TAG, ColorUtil.colorTag(color)),
+				color));
 			break;
 		}
 	}
@@ -218,7 +218,7 @@ public class ChatMessageManager
 				case PRIVATECHAT:
 					return JagexColors.CHAT_PRIVATE_MESSAGE_TEXT_OPAQUE_BACKGROUND;
 				case FRIENDSCHAT:
-					return JagexColors.CHAT_CLAN_TEXT_OPAQUE_BACKGROUND;
+					return JagexColors.CHAT_FC_TEXT_OPAQUE_BACKGROUND;
 				case ITEM_EXAMINE:
 				case OBJECT_EXAMINE:
 				case NPC_EXAMINE:
@@ -238,7 +238,7 @@ public class ChatMessageManager
 				case PRIVATECHAT:
 					return JagexColors.CHAT_PRIVATE_MESSAGE_TEXT_TRANSPARENT_BACKGROUND;
 				case FRIENDSCHAT:
-					return JagexColors.CHAT_CLAN_TEXT_TRANSPARENT_BACKGROUND;
+					return JagexColors.CHAT_FC_TEXT_TRANSPARENT_BACKGROUND;
 				case ITEM_EXAMINE:
 				case OBJECT_EXAMINE:
 				case NPC_EXAMINE:
@@ -311,24 +311,24 @@ public class ChatMessageManager
 			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.opaquePrivateMessageReceivedHighlight(), false),
 				ChatMessageType.MODPRIVATECHAT);
 		}
-		if (chatColorConfig.opaqueClanChatInfo() != null)
+		if (chatColorConfig.opaqueFriendsChatInfo() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.opaqueClanChatInfo(), false),
+			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.opaqueFriendsChatInfo(), false),
 				ChatMessageType.FRIENDSCHATNOTIFICATION);
 		}
-		if (chatColorConfig.opaqueClanChatInfoHighlight() != null)
+		if (chatColorConfig.opaqueFriendsChatInfoHighlight() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.opaqueClanChatInfoHighlight(), false),
+			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.opaqueFriendsChatInfoHighlight(), false),
 				ChatMessageType.FRIENDSCHATNOTIFICATION);
 		}
-		if (chatColorConfig.opaqueClanChatMessage() != null)
+		if (chatColorConfig.opaqueFriendsChatMessage() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.opaqueClanChatMessage(), false),
+			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.opaqueFriendsChatMessage(), false),
 				ChatMessageType.FRIENDSCHAT);
 		}
-		if (chatColorConfig.opaqueClanChatMessageHighlight() != null)
+		if (chatColorConfig.opaqueFriendsChatMessageHighlight() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.opaqueClanChatMessageHighlight(), false),
+			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.opaqueFriendsChatMessageHighlight(), false),
 				ChatMessageType.FRIENDSCHAT);
 		}
 		if (chatColorConfig.opaqueAutochatMessage() != null)
@@ -399,6 +399,11 @@ public class ChatMessageManager
 			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.opaqueFilteredHighlight(), false),
 				ChatMessageType.SPAM);
 		}
+		if (chatColorConfig.opaquePrivateUsernames() != null)
+		{
+			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.opaquePrivateUsernames(), false),
+				ChatMessageType.LOGINLOGOUTNOTIFICATION);
+		}
 
 		//Transparent Chat Colours
 		if (chatColorConfig.transparentPublicChat() != null)
@@ -439,24 +444,24 @@ public class ChatMessageManager
 			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.transparentPrivateMessageReceivedHighlight(), true),
 				ChatMessageType.MODPRIVATECHAT);
 		}
-		if (chatColorConfig.transparentClanChatInfo() != null)
+		if (chatColorConfig.transparentFriendsChatInfo() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.transparentClanChatInfo(), true),
+			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.transparentFriendsChatInfo(), true),
 				ChatMessageType.FRIENDSCHATNOTIFICATION);
 		}
-		if (chatColorConfig.transparentClanChatInfoHighlight() != null)
+		if (chatColorConfig.transparentFriendsChatInfoHighlight() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.transparentClanChatInfoHighlight(), true),
+			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.transparentFriendsChatInfoHighlight(), true),
 				ChatMessageType.FRIENDSCHATNOTIFICATION);
 		}
-		if (chatColorConfig.transparentClanChatMessage() != null)
+		if (chatColorConfig.transparentFriendsChatMessage() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.transparentClanChatMessage(), true),
+			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.transparentFriendsChatMessage(), true),
 				ChatMessageType.FRIENDSCHAT);
 		}
-		if (chatColorConfig.transparentClanChatMessageHighlight() != null)
+		if (chatColorConfig.transparentFriendsChatMessageHighlight() != null)
 		{
-			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.transparentClanChatMessageHighlight(), true),
+			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.transparentFriendsChatMessageHighlight(), true),
 				ChatMessageType.FRIENDSCHAT);
 		}
 		if (chatColorConfig.transparentAutochatMessage() != null)
@@ -527,6 +532,11 @@ public class ChatMessageManager
 			cacheColor(new ChatColor(ChatColorType.HIGHLIGHT, chatColorConfig.transparentFilteredHighlight(), true),
 				ChatMessageType.SPAM);
 		}
+		if (chatColorConfig.transparentPrivateUsernames() != null)
+		{
+			cacheColor(new ChatColor(ChatColorType.NORMAL, chatColorConfig.transparentPrivateUsernames(), true),
+				ChatMessageType.LOGINLOGOUTNOTIFICATION);
+		}
 	}
 
 	private void cacheColor(final ChatColor chatColor, final ChatMessageType... types)
@@ -546,10 +556,9 @@ public class ChatMessageManager
 
 	public void process()
 	{
-		if (!queuedMessages.isEmpty())
+		for (QueuedMessage msg; (msg = queuedMessages.poll()) != null; )
 		{
-			queuedMessages.forEach(this::add);
-			queuedMessages.clear();
+			add(msg);
 		}
 	}
 
@@ -576,7 +585,11 @@ public class ChatMessageManager
 
 		// Update the message with RuneLite additions
 		line.setRuneLiteFormatMessage(message.getRuneLiteFormattedMessage());
-		line.setTimestamp(message.getTimestamp());
+		
+		if (message.getTimestamp() != 0)
+		{
+			line.setTimestamp(message.getTimestamp());
+		}
 
 		update(line);
 	}
