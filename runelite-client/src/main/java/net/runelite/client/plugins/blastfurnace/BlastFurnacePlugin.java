@@ -34,12 +34,12 @@ import lombok.Getter;
 import net.runelite.api.Client;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
+import static net.runelite.api.NullObjectID.NULL_9092;
+import static net.runelite.api.ObjectID.CONVEYOR_BELT;
 import net.runelite.api.Skill;
 import net.runelite.api.events.GameObjectDespawned;
 import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
-import static net.runelite.api.NullObjectID.NULL_9092;
-import static net.runelite.api.ObjectID.CONVEYOR_BELT;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
@@ -60,7 +60,6 @@ import net.runelite.client.util.Text;
 public class BlastFurnacePlugin extends Plugin
 {
 	private static final int BAR_DISPENSER = NULL_9092;
-
 	private static final String FOREMAN_PERMISSION_TEXT = "Okay, you can use the furnace for ten minutes. Remember, you only need half as much coal as with a regular furnace.";
 
 	@Getter(AccessLevel.PACKAGE)
@@ -103,11 +102,13 @@ public class BlastFurnacePlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		infoBoxManager.removeIf(ForemanTimer.class::isInstance);
 		overlayManager.remove(overlay);
 		overlayManager.remove(cofferOverlay);
 		overlayManager.remove(clickBoxOverlay);
 		conveyorBelt = null;
 		barDispenser = null;
+		foremanTimer = null;
 	}
 
 	@Provides
@@ -164,18 +165,23 @@ public class BlastFurnacePlugin extends Plugin
 	public void onGameTick(GameTick event)
 	{
 		Widget npcDialog = client.getWidget(WidgetInfo.DIALOG_NPC_TEXT);
+		if (npcDialog == null)
+		{
+			return;
+		}
 
 		// blocking dialog check until 5 minutes needed to avoid re-adding while dialog message still displayed
 		boolean shouldCheckForemanFee = client.getRealSkillLevel(Skill.SMITHING) < 60
-				&& (foremanTimer == null || Duration.between(Instant.now(), foremanTimer.getEndTime()).toMinutes() <= 5);
+			&& (foremanTimer == null || Duration.between(Instant.now(), foremanTimer.getEndTime()).toMinutes() <= 5);
 
-		if (npcDialog != null && shouldCheckForemanFee)
+		if (shouldCheckForemanFee)
 		{
 			String npcText = Text.sanitizeMultilineText(npcDialog.getText());
 
 			if (npcText.equals(FOREMAN_PERMISSION_TEXT))
 			{
-				infoBoxManager.removeIf(t -> t instanceof ForemanTimer);
+				infoBoxManager.removeIf(ForemanTimer.class::isInstance);
+
 				foremanTimer = new ForemanTimer(this, itemManager);
 				infoBoxManager.addInfoBox(foremanTimer);
 			}

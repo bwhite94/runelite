@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Brandon White <bmwqg@live.com>
+ * Copyright (c) 2019, Lucas C <lucas1757@gmail.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,21 +22,19 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package net.runelite.client.plugins.blastfurnace;
+package net.runelite.client.plugins.cooking;
 
-import java.time.temporal.ChronoUnit;
-import net.runelite.api.ItemID;
-import net.runelite.client.game.ItemManager;
-import net.runelite.client.ui.overlay.infobox.Timer;
+import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
 
-class ForemanTimer extends Timer
+class FermentTimerSession
 {
-	private static final String TOOLTIP_TEXT = "Foreman Fee";
+	@Getter(AccessLevel.PACKAGE)
+	private Instant lastWineMakingAction;
 
-	ForemanTimer(BlastFurnacePlugin plugin, ItemManager itemManager)
+	void updateLastWineMakingAction()
 	{
-		super(10, ChronoUnit.MINUTES, itemManager.getImage(ItemID.COAL_BAG), plugin);
-
-		setTooltip(TOOLTIP_TEXT);
+		this.lastWineMakingAction = Instant.now();
 	}
 }
